@@ -1,88 +1,115 @@
 import { useState } from "react";
 import axios from "axios";
-import "./App.css";
 import "./index.css";
 
 function App() {
   const [urlValue, setUrlValue] = useState("");
   const [data, setData] = useState(null);
+  const [error, setError] = useState(null);
+  const [isFetching, setIsFetching] = useState(false);
+  const [isLoadingVideo, setIsLoadingVideo] = useState(false);
 
-  const handleDownload = async () => {
+  const handleFetch = async () => {
     try {
-      // Request video info from the server
+      setIsFetching(true);
+      setError(null);
+      setData(null);
+
       const response = await axios.get(
         `http://localhost:4000/download?url=${urlValue}`
       );
-      // Save video info along with the original URL
-      setData({ ...response.data, originalURL: urlValue });
-      setUrlValue("");
-    } catch (error) {
-      console.error("Error fetching video info:", error);
+
+      if (!response.data?.formats) {
+        throw new Error("Invalid response from server");
+      }
+
+      setData({
+        title: response.data.title,
+        duration: response.data.duration,
+        thumbnail: response.data.thumbnail,
+        videoId: response.data.videoId
+      });
+
+    } catch (err) {
+      console.error("Error fetching video info:", err);
+      setError(err.message || "Failed to fetch video info");
+    } finally {
+      setIsFetching(false);
     }
   };
 
   return (
-    <div className="bg- flex flex-col justify-center items-center min-h-screen">
-      <div className="flex flex-row justify-center items-center">
-        <div className="text-4xl font-bold">
-          <h1>
-            <span className="text-red-700">YouTube</span> Downloader
-          </h1>
-        </div>
-      </div>
-      <div className="flex flex-row my-4">
-        <input
-          type="text"
-          placeholder="Enter URL"
-          value={urlValue}
-          onChange={(e) => setUrlValue(e.target.value)}
-          className="outline-none p-2 bg-yellow-500 border-2 border-gray-500 rounded-md md:mr-4"
-        />
-        <button
-          onClick={handleDownload}
-          className="bg-black text-yellow-500 py-2 px-6 rounded-md cursor-pointer"
-        >
-          Get Video Info
-        </button>
-      </div>
+    <div className="bg-black/20 flex flex-col items-center min-h-screen pt-30">
+      <header className="text-center mb-12">
+        <h1 className="text-5xl font-bold">
+          <span className="text-[#ff0033]">YouTube</span>
+          <span className="text-white">Downloader</span>
+        </h1>
+      </header>
 
-      {data && (
-        <div className="my-4">
-          <iframe width="570" height="320" src={data.url} title="video" />
-          <div className="mt-4">
-            {data.info.map((format, index) => (
-              <div key={index}>
-                <a
-                  href={format.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="underline italic"
+      <div className="w-full max-w-2xl px-4">
+        <div className="flex flex-col gap-6">
+          <div className="flex gap-4">
+            <input
+              type="text"
+              placeholder="Enter YouTube URL"
+              value={urlValue}
+              onChange={(e) => setUrlValue(e.target.value)}
+              className="flex-1 p-4 rounded-lg border border-gray-300"
+            />
+            <button
+              onClick={handleFetch}
+              disabled={isFetching}
+              className="px-8 py-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+            >
+              {isFetching ? "Fetching..." : "Fetch Video"}
+            </button>
+          </div>
+
+          {error && (
+            <div className="p-4 bg-red-100 text-red-700 rounded-lg">
+              {error}
+            </div>
+          )}
+
+          {data && (
+            <div className="mt-8">
+              <div className="bg-black rounded-lg overflow-hidden">
+                <video
+                  controls
+                  className="w-full"
+                  onLoadStart={() => setIsLoadingVideo(true)}
+                  onLoadedData={() => setIsLoadingVideo(false)}
+                  poster={data.thumbnail}
                 >
-                  {format.mimeType.split(";")[0]}{" "}
-                  {format.hasVideo ? `${format.height}p` : ""}
+                  <source
+                    src={`http://localhost:4000/downloadFile?url=${encodeURIComponent(urlValue)}`}
+                    type="video/mp4"
+                  />
+                  {isLoadingVideo && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/50">
+                      <div className="animate-spin text-white text-4xl">🌀</div>
+                    </div>
+                  )}
+                </video>
+              </div>
+
+              <div className="mt-6 text-center">
+                <h2 className="text-2xl font-bold mb-2">{data.title}</h2>
+                <p className="text-gray-600">Duration: {data.duration}</p>
+                
+                <a
+                  href={`http://localhost:4000/downloadFile?url=${encodeURIComponent(urlValue)}`}
+                  download
+                  className="inline-block mt-6 px-8 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700"
+                >
+                  Download MP4
                 </a>
               </div>
-            ))}
-          </div>
-          <div className="mt-6">
-            {/* Download video file via server proxy */}
-            <a
-              href={`http://localhost:4000/downloadFile?url=${data.originalURL}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="bg-black text-yellow-500 py-2 px-6 rounded-md cursor-pointer inline-block"
-            >
-              Download Video File
-            </a>
-          </div>
+            </div>
+          )}
         </div>
-      )}
-
-      {!data && (
-        <div className="text-red-700 font-bold mt-10">
-          No download yet
-        </div>
-      )}
+      </div>
     </div>
   );
 }
